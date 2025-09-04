@@ -556,8 +556,9 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 	function evaluateAA(arrDefinition, cb) {
 		var locals = {};
 		var f = getFormula(arrDefinition[1].getters);
-		if (f === null) // no getters
-			return replace(arrDefinition, 1, '', locals, cb);
+		if (f === null) { // no getters
+			return replace(arrDefinition, 1, '', locals, cb, '');
+		}
 		// evaluate getters before everything else as they can define a few functions
 		delete arrDefinition[1].getters;
 		var opts = {
@@ -576,18 +577,19 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 		formulaParser.evaluate(opts, function (err, res) {
 			if (res === null)
 				return cb(err.bounce_message || "formula " + f + " failed: " + err);
-			replace(arrDefinition, 1, '', locals, cb);
-		});
+			replace(arrDefinition, 1, '', locals, cb, '');
+		}, [], '/getters');
 	}
 
 	// note that app=definition is also replaced using the current trigger and vars, its code has to generate "{}"-formulas in order to be dynamic
-	function replace(obj, name, path, locals, cb) {
+	function replace(obj, name, path, locals, cb, xpath) {
 		count++;
 		if (count % 100 === 0) // interrupt the call stack
-			return setImmediate(replace, obj, name, path, locals, cb);
+			return setImmediate(replace, obj, name, path, locals, cb, xpath);
 		locals = _.clone(locals);
 		var value = obj[name];
 		if (typeof name === 'string') {
+			xpath += '/' + name;
 			var f = getFormula(name);
 			if (f !== null) {
 				var opts = {
@@ -614,8 +616,8 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					if (getFormula(res) !== null)
 						return cb("calculated value of " + name + " looks like a formula again: " + res);
 					assignField(obj, res, value);
-					replace(obj, res, path, locals, cb);
-				});
+					replace(obj, res, path, locals, cb, xpath);
+				}, [], xpath);
 			}
 		}
 		if (typeof value === 'number' || typeof value === 'boolean')
@@ -629,9 +631,10 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			if (bStateUpdates) {
 				if (objStateUpdate)
 					return cb("second state update formula: " + f + ", existing: " + objStateUpdate.formula);
-				objStateUpdate = {formula: f, locals: locals};
+				objStateUpdate = {formula: f, locals: locals, xpath};
 				return cb();
 			}
+
 			var opts = {
 				conn: conn,
 				formula: f,
@@ -657,13 +660,16 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 				else
 					assignField(obj, name, res);
 				cb();
-			});
+			}, [], xpath);
 		}
 		else if (hasCases(value)) {
 			var thecase;
+			xpath += '/cases';
+			let idx = -1;
 			async.eachSeries(
 				value.cases,
 				function (acase, cb2) {
+					idx++;
 					if (!("if" in acase)) {
 						thecase = acase;
 						return cb2('done');
@@ -692,9 +698,10 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 							return cb2('done');
 						}
 						cb2(); // try next
-					});
+					}, [], xpath + '/' + idx + '/if');
 				},
 				function (err) {
+					xpath += '/' + idx;
 					if (!err)
 						return cb("neither case is true in " + name);
 					if (err !== 'done')
@@ -704,7 +711,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 						throw Error("a case was selected but no replacement value in " + name);
 					assignField(obj, name, replacement_value);
 					if (!thecase.init)
-						return replace(obj, name, path, locals, cb);
+						return replace(obj, name, path, locals, cb, xpath);
 					var f = getFormula(thecase.init);
 					if (f === null)
 						return cb("case init is not a formula: " + thecase.init);
@@ -723,8 +730,8 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					formulaParser.evaluate(opts, function (err, res) {
 						if (res === null)
 							return cb(err.bounce_message || "formula " + f + " failed: " + err);
-						replace(obj, name, path, locals, cb);
-					});
+						replace(obj, name, path, locals, cb, xpath);
+					}, [], xpath + '/init');
 				}
 			);
 		}
@@ -758,11 +765,11 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					}
 					delete value.if;
 					cb2();
-				});
+				}, [], xpath + '/if');
 			}
 			evaluateIf(function () {
 				if (typeof value.init !== 'string')
-					return replace(obj, name, path, locals, cb);
+					return replace(obj, name, path, locals, cb, xpath);
 				var f = getFormula(value.init);
 				if (f === null)
 					return cb("init is not a formula: " + value.init);
@@ -782,15 +789,16 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					if (res === null)
 						return cb(err.bounce_message || "formula " + value.init + " failed: " + err);
 					delete value.init;
-					replace(obj, name, path, locals, cb);
-				});
+					replace(obj, name, path, locals, cb, xpath);
+				}, [], xpath + '/init');
 			});
 		}
 		else if (Array.isArray(value)) {
 			async.eachOfSeries(
 				value,
 				function (elem, i, cb2) {
-					replace(value, i, path, _.clone(locals), cb2);
+					const nXpath = xpath + '/' + i;
+					replace(value, i, path, _.clone(locals), cb2, nXpath);
 				},
 				function (err) {
 					if (err)
@@ -812,7 +820,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			async.eachSeries(
 				Object.keys(value),
 				function (key, cb2) {
-					replace(value, key, path + '/' + key, _.clone(locals), cb2);
+					replace(value, key, path + '/' + key, _.clone(locals), cb2, xpath);
 				},
 				function (err) {
 					if (err)
@@ -1328,7 +1336,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			if (rv_len > constants.MAX_RESPONSE_VARS_LENGTH)
 				return cb(`response vars too long: ${rv_len}`);
 			cb();
-		});
+		}, [], objStateUpdate.xpath);
 	}
 
 	function getResponseVarsLength() {
