@@ -443,7 +443,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 	var originalBalances;
 	if (bSecondary)
 		updateOriginalOldValues();
-
+	
 	// add the coins received in the trigger
 	function updateInitialAABalances(cb) {
 		if (trigger_opts.assocBalances) {
@@ -506,7 +506,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			}
 		);
 	}
-
+	
 	function updateFinalAABalances(arrConsumedOutputs, objUnit, cb) {
 		if (trigger_opts.bAir)
 			throw Error("updateFinalAABalances shouldn't be called with bAir");
@@ -556,8 +556,9 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 	function evaluateAA(arrDefinition, cb) {
 		var locals = {};
 		var f = getFormula(arrDefinition[1].getters);
-		if (f === null) // no getters
-			return replace(arrDefinition, 1, '', locals, cb);
+		if (f === null) { // no getters
+			return replace(arrDefinition, 1, '', locals, cb, '');
+		}
 		// evaluate getters before everything else as they can define a few functions
 		delete arrDefinition[1].getters;
 		var opts = {
@@ -575,19 +576,20 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 		};
 		formulaParser.evaluate(opts, function (err, res) {
 			if (res === null)
-				return cb(err.bounce_message || "formula " + f + " failed: " + err);
-			replace(arrDefinition, 1, '', locals, cb);
-		});
+				return cb(err);
+			replace(arrDefinition, 1, '', locals, cb, '');
+		}, [], '/getters');
 	}
-
+	
 	// note that app=definition is also replaced using the current trigger and vars, its code has to generate "{}"-formulas in order to be dynamic
-	function replace(obj, name, path, locals, cb) {
+	function replace(obj, name, path, locals, cb, xpath) {
 		count++;
 		if (count % 100 === 0) // interrupt the call stack
-			return setImmediate(replace, obj, name, path, locals, cb);
+			return setImmediate(replace, obj, name, path, locals, cb, xpath);
 		locals = _.clone(locals);
 		var value = obj[name];
 		if (typeof name === 'string') {
+			xpath += '/' + name;
 			var f = getFormula(name);
 			if (f !== null) {
 				var opts = {
@@ -603,7 +605,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 				};
 				return formulaParser.evaluate(opts, function (err, res) {
 					if (res === null)
-						return cb(err.bounce_message || "formula " + f + " failed: "+err);
+						return cb(err.formattedError || "formula " + f + " failed: "+err);
 					delete obj[name];
 					if (res === '')
 						return cb(); // the key is just removed from the object
@@ -614,8 +616,8 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					if (getFormula(res) !== null)
 						return cb("calculated value of " + name + " looks like a formula again: " + res);
 					assignField(obj, res, value);
-					replace(obj, res, path, locals, cb);
-				});
+					replace(obj, res, path, locals, cb, xpath);
+				}, [], xpath);
 			}
 		}
 		if (typeof value === 'number' || typeof value === 'boolean')
@@ -624,14 +626,15 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			var f = getFormula(value);
 			if (f === null)
 				return cb();
-		//	console.log('path', path, 'name', name, 'f', f);
+			//	console.log('path', path, 'name', name, 'f', f);
 			var bStateUpdates = (path === '/messages/state');
 			if (bStateUpdates) {
 				if (objStateUpdate)
 					return cb("second state update formula: " + f + ", existing: " + objStateUpdate.formula);
-				objStateUpdate = {formula: f, locals: locals};
+				objStateUpdate = {formula: f, locals: locals, xpath};
 				return cb();
 			}
+			
 			var opts = {
 				conn: conn,
 				formula: f,
@@ -645,9 +648,9 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 				bObjectResultAllowed: true
 			};
 			formulaParser.evaluate(opts, function (err, res) {
-			//	console.log('--- f', f, '=', res, typeof res);
+				//	console.log('--- f', f, '=', res, typeof res);
 				if (res === null)
-					return cb(err.bounce_message || "formula " + f + " failed: "+err);
+					return cb(err.formattedError || "formula " + f + " failed: "+err);
 				if (res === '' || isEmptyObjectOrArray(res)) { // signals that the key should be removed (only empty string or array or object, cannot be false as it is a valid value for asset properties)
 					if (typeof name === 'string')
 						delete obj[name];
@@ -657,13 +660,16 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 				else
 					assignField(obj, name, res);
 				cb();
-			});
+			}, [], xpath);
 		}
 		else if (hasCases(value)) {
 			var thecase;
+			xpath += '/cases';
+			let idx = -1;
 			async.eachSeries(
 				value.cases,
 				function (acase, cb2) {
+					idx++;
 					if (!("if" in acase)) {
 						thecase = acase;
 						return cb2('done');
@@ -685,16 +691,17 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					};
 					formulaParser.evaluate(opts, function (err, res) {
 						if (res === null)
-							return cb2(err.bounce_message || "formula " + acase.if + " failed: " + err);
+							return cb2(err.formattedError || "formula " + acase.if + " failed: " + err);
 						if (res) {
 							thecase = acase;
 							locals = locals_tmp;
 							return cb2('done');
 						}
 						cb2(); // try next
-					});
+					}, [], xpath + '/' + idx + '/if');
 				},
 				function (err) {
+					xpath += '/' + idx;
 					if (!err)
 						return cb("neither case is true in " + name);
 					if (err !== 'done')
@@ -704,7 +711,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 						throw Error("a case was selected but no replacement value in " + name);
 					assignField(obj, name, replacement_value);
 					if (!thecase.init)
-						return replace(obj, name, path, locals, cb);
+						return replace(obj, name, path, locals, cb, xpath);
 					var f = getFormula(thecase.init);
 					if (f === null)
 						return cb("case init is not a formula: " + thecase.init);
@@ -722,9 +729,9 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					};
 					formulaParser.evaluate(opts, function (err, res) {
 						if (res === null)
-							return cb(err.bounce_message || "formula " + f + " failed: " + err);
-						replace(obj, name, path, locals, cb);
-					});
+							return cb(err.formattedError || "formula " + f + " failed: " + err);
+						replace(obj, name, path, locals, cb, xpath);
+					}, [], xpath + '/init');
 				}
 			);
 		}
@@ -748,7 +755,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 				};
 				formulaParser.evaluate(opts, function (err, res) {
 					if (res === null)
-						return cb(err.bounce_message || "formula " + value.if + " failed: " + err);
+						return cb(err.formattedError || "formula " + value.if + " failed: " + err);
 					if (!res) {
 						if (typeof name === 'string')
 							delete obj[name];
@@ -758,11 +765,11 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					}
 					delete value.if;
 					cb2();
-				});
+				}, [], xpath + '/if');
 			}
 			evaluateIf(function () {
 				if (typeof value.init !== 'string')
-					return replace(obj, name, path, locals, cb);
+					return replace(obj, name, path, locals, cb, xpath);
 				var f = getFormula(value.init);
 				if (f === null)
 					return cb("init is not a formula: " + value.init);
@@ -780,17 +787,18 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 				};
 				formulaParser.evaluate(opts, function (err, res) {
 					if (res === null)
-						return cb(err.bounce_message || "formula " + value.init + " failed: " + err);
+						return cb(err.formattedError || "formula " + value.init + " failed: " + err);
 					delete value.init;
-					replace(obj, name, path, locals, cb);
-				});
+					replace(obj, name, path, locals, cb, xpath);
+				}, [], xpath + '/init');
 			});
 		}
 		else if (Array.isArray(value)) {
 			async.eachOfSeries(
 				value,
 				function (elem, i, cb2) {
-					replace(value, i, path, _.clone(locals), cb2);
+					const nXpath = xpath + '/' + i;
+					replace(value, i, path, _.clone(locals), cb2, nXpath);
 				},
 				function (err) {
 					if (err)
@@ -812,7 +820,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			async.eachSeries(
 				Object.keys(value),
 				function (key, cb2) {
-					replace(value, key, path + '/' + key, _.clone(locals), cb2);
+					replace(value, key, path + '/' + key, _.clone(locals), cb2, xpath);
 				},
 				function (err) {
 					if (err)
@@ -831,7 +839,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 		else
 			throw Error('unknown type of value in ' + name);
 	}
-
+	
 	function pickParents(handleParents) {
 		if (trigger_opts.bAir)
 			throw Error("pickParents shouldn't be called with bAir");
@@ -865,7 +873,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			}
 		);
 	}
-
+	
 	var bBouncing = false;
 	function bounce(error) {
 		console.log('bouncing with error', error, new Error().stack);
@@ -902,7 +910,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			return finish(null);
 		sendUnit(messages);
 	}
-
+	
 	// with bAir option, we don't send or save a real unit
 	function sendDummyUnit(messages) {
 		console.log('AA ' + address + ': send dummy unit with messages', JSON.stringify(messages, null, '\t'));
@@ -961,19 +969,19 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			);
 		});
 	}
-
+	
 	function sendUnit(messages) {
 		if (trigger_opts.bAir)
 			return sendDummyUnit(messages);
 		console.log('send unit with messages', JSON.stringify(messages, null, '\t'));
 		var arrUsedOutputIds = [];
 		var arrConsumedOutputs = [];
-
+		
 		function completeMessage(message) {
 			message.payload_location = 'inline';
 			message.payload_hash = objectHash.getBase64Hash(message.payload, true);
 		}
-
+		
 		function completePaymentPayload(payload, size, cb) {
 			var asset = payload.asset || null;
 			var is_base = (asset === null) ? 1 : 0;
@@ -981,7 +989,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 				size += "inputs".length;
 			payload.inputs = [];
 			var total_amount = 0;
-
+			
 			var send_all_outputs = payload.outputs.filter(function (output) { return (output.amount === undefined); });
 			if (send_all_outputs.length > 1)
 				return cb(send_all_outputs.length + " send-all outputs");
@@ -1000,11 +1008,11 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			var net_target_amount = payload.outputs.reduce(function (acc, output) { return acc + (output.amount || 0); }, size);
 			let target_amount = net_target_amount + getOversizeFee(size);
 			var bFound = false;
-
+			
 			function getOversizeFee(s) {
 				return (mci >= constants.v4UpgradeMci && is_base) ? storage.getOversizeFee(s - paid_temp_data_fee, mci) : 0;
 			}
-
+			
 			function iterateUnspentOutputs(rows) {
 				for (var i = 0; i < rows.length; i++){
 					var row = rows[i];
@@ -1042,9 +1050,9 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					}
 				}
 			}
-
+			
 			function readStableOutputs(handleRows) {
-			//	console.log('--- readStableOutputs');
+				//	console.log('--- readStableOutputs');
 				// byte outputs less than 60 bytes (which are net negative) are ignored to prevent dust attack: spamming the AA with very small outputs so that the AA spends all its money for fees when it tries to respond
 				conn.query(
 					"SELECT unit, message_index, output_index, amount, output_id \n\
@@ -1057,9 +1065,9 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					[address, mci], handleRows
 				);
 			}
-
+			
 			function readUnstableOutputsSentByAAs(handleRows) {
-			//	console.log('--- readUnstableOutputsSentByAAs');
+				//	console.log('--- readUnstableOutputsSentByAAs');
 				conn.query(
 					"SELECT outputs.unit, message_index, output_index, amount, output_id \n\
 					FROM outputs \n\
@@ -1073,13 +1081,13 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					[address, mci], handleRows
 				);
 			}
-
+			
 			function issueAsset(cb2) {
 				var objAsset = assetInfos[asset];
 				if (objAsset.issued_by_definer_only && address !== objAsset.definer_address)
 					return cb2("not a definer");
 				var issue_amount = objAsset.cap || (target_amount - total_amount);
-
+				
 				function addIssueInput(serial_number){
 					var input = {
 						type: "issue",
@@ -1112,7 +1120,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					);
 				}
 			}
-
+			
 			function sortOutputsAndReturn() {
 				if (send_all_output && send_all_output.amount === undefined)
 					_.pull(payload.outputs, send_all_output);
@@ -1121,7 +1129,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 				payload.outputs.sort(sortOutputs);
 				cb();
 			}
-
+			
 			readStableOutputs(function (rows) {
 				iterateUnspentOutputs(rows);
 				if (bFound && !send_all_output)
@@ -1145,7 +1153,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 				});
 			});
 		}
-
+		
 		for (var i = 0; i < messages.length; i++){
 			var message = messages[i];
 			if (message.app !== 'payment')
@@ -1252,8 +1260,8 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 				};
 				if (mci < constants.v4UpgradeMci)
 					objUnit.witness_list_unit = objMcUnit.witnesses ? objMcUnit.unit : objMcUnit.witness_list_unit;
-			//	else
-			//		objUnit.tps_fee = 0;
+				//	else
+				//		objUnit.tps_fee = 0;
 				pickParents(function (parent_units) {
 					objUnit.parent_units = parent_units;
 					objUnit.headers_commission = objectLength.getHeadersSize(objUnit);
@@ -1261,7 +1269,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					var size = objUnit.headers_commission + objUnit.payload_commission;
 					console.log('unit before completing bytes payment', JSON.stringify(objUnit, null, '\t'));
 					completePaymentPayload(objBasePaymentMessage.payload, size, function (err) {
-					//	console.log('--- completePaymentPayload', err);
+						//	console.log('--- completePaymentPayload', err);
 						if (err)
 							return bounce(err);
 						completeMessage(objBasePaymentMessage); // fixes payload_hash
@@ -1296,7 +1304,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			}
 		);
 	}
-
+	
 	function executeStateUpdateFormula(objResponseUnit, cb) {
 		if (bBouncing)
 			return cb();
@@ -1321,23 +1329,23 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			objResponseUnit: objResponseUnit
 		};
 		formulaParser.evaluate(opts, function (err, res) {
-		//	console.log('--- state update formula', objStateUpdate.formula, '=', res);
+			//	console.log('--- state update formula', objStateUpdate.formula, '=', res);
 			if (res === null)
-				return cb(err.bounce_message || "formula " + objStateUpdate.formula + " failed: "+err);
+				return cb(err.formattedError || "formula " + objStateUpdate.formula + " failed: "+err);
 			const rv_len = getResponseVarsLength();
 			if (rv_len > constants.MAX_RESPONSE_VARS_LENGTH)
 				return cb(`response vars too long: ${rv_len}`);
 			cb();
-		});
+		}, [], objStateUpdate.xpath);
 	}
-
+	
 	function getResponseVarsLength() {
 		if (mci < constants.v4UpgradeMci)
 			return 0;
 		const serializedResponseVars = JSON.stringify(responseVars);
 		return serializedResponseVars.length;
 	}
-
+	
 	function fixStateVars() {
 		if (bBouncing)
 			return;
@@ -1352,7 +1360,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			}
 		}
 	}
-
+	
 	function saveStateVars() {
 		if (bSecondary || bBouncing || trigger_opts.bAir)
 			return;
@@ -1370,7 +1378,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			}
 		}
 	}
-
+	
 	function getTypeAndValue(value) {
 		if (typeof value === 'string')
 			return 's\n' + value;
@@ -1379,9 +1387,9 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 		else if (value instanceof wrappedObject)
 			return 'j\n' + string_utils.getJsonSourceString(value.obj, true);
 		else
-			throw Error("state var of unknown type: " + value);	
+			throw Error("state var of unknown type: " + value);
 	}
-
+	
 	function getValueSize(value) {
 		if (typeof value === 'string')
 			return value.length;
@@ -1390,9 +1398,9 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 		else if (value instanceof wrappedObject)
 			return string_utils.getJsonSourceString(value.obj, true).length;
 		else
-			throw Error("state var of unknown type: " + value);		
+			throw Error("state var of unknown type: " + value);
 	}
-
+	
 	function updateStorageSize(cb) {
 		if (bBouncing || trigger_opts.bAir)
 			return cb();
@@ -1425,7 +1433,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			cb();
 		});
 	}
-
+	
 	function updateOriginalOldValues() {
 		if (!bSecondary || !stateVars[address])
 			return;
@@ -1436,7 +1444,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 				state.original_old_value = (state.value === false) ? undefined : state.value;
 		}
 	}
-
+	
 	function handleSuccessfulEmptyResponseUnit() {
 		if (!objStateUpdate)
 			return bounce("no state changes");
@@ -1448,7 +1456,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			finish(null);
 		});
 	}
-
+	
 	var bAddedResponse = false;
 	function addResponse(objResponseUnit, cb) {
 		var response_unit = objResponseUnit ? objResponseUnit.unit : null;
@@ -1491,7 +1499,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			}
 		);
 	}
-
+	
 	function addUpdatedStateVarsIntoPrimaryResponse() {
 		if (bSecondary || bBouncing)
 			return;
@@ -1512,8 +1520,8 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 				if (typeof varInfo.value === 'number') {
 					if (typeof varInfo.old_value === 'number')
 						varInfo.delta = varInfo.value - varInfo.old_value;
-				//	else if (varInfo.old_value === undefined || varInfo.old_value === false)
-				//		varInfo.delta = varInfo.value;
+					//	else if (varInfo.old_value === undefined || varInfo.old_value === false)
+					//		varInfo.delta = varInfo.value;
 				}
 				assignField(updatedStateVars[var_address], var_name, varInfo);
 				if (state.value === false) // deleted variable
@@ -1522,7 +1530,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 		}
 		arrResponses[0].updatedStateVars = updatedStateVars;
 	}
-
+	
 	function finish(objResponseUnit) {
 		if (bBouncing && bSecondary) {
 			if (objResponseUnit)
@@ -1542,7 +1550,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			});
 		});
 	}
-
+	
 	function handleSecondaryTriggers(objUnit, arrOutputAddresses) {
 		conn.query("SELECT address, definition, mci, main_chain_index FROM aa_addresses LEFT JOIN units USING(unit) WHERE address IN(?) AND mci<=? ORDER BY address", [arrOutputAddresses, mci], function (rows) {
 			if (rows.length > 0 && constants.bTestnet && mci < testnetAAsDefinedByAAsAreActiveImmediatelyUpgradeMci)
@@ -1568,7 +1576,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					child_trigger.initial_address = trigger.initial_address;
 					child_trigger.initial_unit = trigger.initial_unit;
 					var arrChildDefinition = JSON.parse(row.definition);
-
+					
 					var child_trigger_opts = Object.assign({}, trigger_opts);
 					child_trigger_opts.trigger = child_trigger;
 					child_trigger_opts.params = {};
@@ -1596,7 +1604,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			);
 		});
 	}
-
+	
 	function revert(err) {
 		console.log('will revert: ' + err);
 		if (bSecondary)
@@ -1637,7 +1645,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			});
 		});*/
 	}
-
+	
 	function validateAndSaveUnit(objUnit, cb) {
 		var objJoint = { unit: objUnit, aa: true };
 		validation.validate(objJoint, {
@@ -1676,10 +1684,10 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			}
 		}, conn);
 	}
-
-
+	
+	
 	updateInitialAABalances(function () {
-
+		
 		// these errors must be thrown after updating the balances
 		if (arrResponses.length >= constants.MAX_RESPONSES_PER_PRIMARY_TRIGGER) // max number of responses per primary trigger, over all branches stemming from the primary trigger
 			return bounce("max number of responses per trigger exceeded");
@@ -1696,7 +1704,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 				}
 			}
 		}
-
+		
 		evaluateAA(arrDefinition, function (err) {
 			if (err)
 				return bounce(err);
@@ -1720,7 +1728,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			sendUnit(messages);
 		});
 	});
-
+	
 }
 
 function sortOutputs(a,b){
@@ -1756,7 +1764,7 @@ function checkStorageSizes() {
 			var options = {};
 			options.gte = "st\n";
 			options.lte = "st\n\uFFFF";
-
+			
 			var assocSizes = {};
 			var handleData = function (data) {
 				var address = data.key.substr(3, 32);
@@ -1853,7 +1861,7 @@ function checkBalances() {
 					GROUP BY aa_addresses.address, outputs.asset \n\
 					HAVING balance != calculated_balance";
 				async.eachSeries(
-				//	[sql_base, sql_assets_balances_to_outputs, sql_assets_outputs_to_balances],
+					//	[sql_base, sql_assets_balances_to_outputs, sql_assets_outputs_to_balances],
 					[sql_create_temp, sql_fill_temp, sql_balances_to_outputs, sql_outputs_to_balances, sql_drop_temp],
 					function (sql, cb) {
 						conn.query(sql, function (rows) {
