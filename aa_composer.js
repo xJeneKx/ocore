@@ -576,7 +576,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 		};
 		formulaParser.evaluate(opts, function (err, res) {
 			if (res === null)
-				return cb(err);
+				return cb(err.formattedError || "formula " + f + " failed: " + err);
 			replace(arrDefinition, 1, '', locals, cb, '');
 		}, [], '/getters');
 	}
