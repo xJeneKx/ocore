@@ -1537,7 +1537,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 				throw Error('response_unit with bouncing a secondary AA');
 			if (!bAddedResponse && objValidationState.logs) // add the logs from the final bouncing unit
 				arrResponses.push({ logs: objValidationState.logs });
-			return onDone(null, address + ': ' + error_message);
+			return onDone(null, {address, error_message});
 		}
 		fixStateVars();
 		saveStateVars();
@@ -1595,7 +1595,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 						// revert
 						if (bSecondary)
 							return bounce(err);
-						return revert("one of secondary AAs bounced with error: " + err);
+						return revert({revert: "one of secondary AAs bounced with error: ", err});
 					}
 					saveStateVars();
 					addUpdatedStateVarsIntoPrimaryResponse();
