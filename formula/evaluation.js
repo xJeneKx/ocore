@@ -3006,7 +3006,7 @@ exports.evaluate = function (opts, callback, astTrace = [], xpath = '') {
 	}
 	
 	function setFatalError(err, cb, cb_arg, meta){
-		if (cb_arg.arr) {
+		if (cb_arg?.arr) {
 			meta = cb_arg;
 			cb_arg = undefined;
 		}

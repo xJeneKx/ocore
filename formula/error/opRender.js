@@ -15,6 +15,12 @@ module.exports = function renderOp(arr, format = true) {
     if (typeof arr === 'boolean') {
         return arr;
     }
+	
+	if (typeof arr === 'object' && !Array.isArray(arr)) {
+		if (!Number.isNaN(Number(arr))) {
+			return arr.toString();
+		}
+	}
 
     if (typeof arr === 'string') {
         if (!Number.isNaN(Number(arr))) {

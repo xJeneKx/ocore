@@ -610,11 +610,11 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					if (res === '')
 						return cb(); // the key is just removed from the object
 					if (typeof res !== 'string')
-						return cb("result of formula " + name + " is not a string: " + res);
+						return cb({error: "result of formula " + name + " is not a string: " + res, xpath});
 					if (ValidationUtils.hasOwnProperty(obj, res))
-						return cb("duplicate key " + res + " calculated from " + name);
+						return cb({error: "duplicate key " + res + " calculated from " + name, xpath});
 					if (getFormula(res) !== null)
-						return cb("calculated value of " + name + " looks like a formula again: " + res);
+						return cb({error: "calculated value of " + name + " looks like a formula again: " + res, xpath});
 					assignField(obj, res, value);
 					replace(obj, res, path, locals, cb, xpath);
 				}, [], xpath);
@@ -630,7 +630,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			var bStateUpdates = (path === '/messages/state');
 			if (bStateUpdates) {
 				if (objStateUpdate)
-					return cb("second state update formula: " + f + ", existing: " + objStateUpdate.formula);
+					return cb({error: "second state update formula: " + f + ", existing: " + objStateUpdate.formula, xpath});
 				objStateUpdate = {formula: f, locals: locals, xpath};
 				return cb();
 			}
@@ -676,7 +676,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					}
 					var f = getFormula(acase.if);
 					if (f === null)
-						return cb2("case if is not a formula: " + acase.if);
+						return cb2({error: "case if is not a formula: " + acase.if, xpath});
 					var locals_tmp = _.clone(locals); // separate copy for each iteration of eachSeries
 					var opts = {
 						conn: conn,
@@ -703,7 +703,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 				function (err) {
 					xpath += '/' + idx;
 					if (!err)
-						return cb("neither case is true in " + name);
+						return cb({error: "neither case is true in " + name, xpath});
 					if (err !== 'done')
 						return cb(err);
 					var replacement_value = thecase[name];
@@ -714,7 +714,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 						return replace(obj, name, path, locals, cb, xpath);
 					var f = getFormula(thecase.init);
 					if (f === null)
-						return cb("case init is not a formula: " + thecase.init);
+						return cb({error: "case init is not a formula: " + thecase.init, xpath});
 					var opts = {
 						conn: conn,
 						formula: f,
@@ -741,7 +741,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					return cb2();
 				var f = getFormula(value.if);
 				if (f === null)
-					return cb("if is not a formula: " + value.if);
+					return cb({error: "if is not a formula: " + value.if, xpath});
 				var opts = {
 					conn: conn,
 					formula: f,
@@ -772,7 +772,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					return replace(obj, name, path, locals, cb, xpath);
 				var f = getFormula(value.init);
 				if (f === null)
-					return cb("init is not a formula: " + value.init);
+					return cb({error: "init is not a formula: " + value.init, xpath});
 				var opts = {
 					conn: conn,
 					formula: f,
