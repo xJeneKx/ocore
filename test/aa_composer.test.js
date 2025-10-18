@@ -1035,7 +1035,7 @@ test.cb.serial('trying to modify a var conditionally frozen in an earlier formul
 		t.deepEqual(arrResponses[0].bounced, true);
 		t.deepEqual(arrResponses[0].response_unit, null);
 		t.deepEqual(arrResponses[0].objResponseUnit, null);
-		t.deepEqual(arrResponses[0].response.error, {message:"variable x is frozen",formattedContext:"$x",codeLines:[{line:2,formula:"$x.b = 8;"}],xpath:"/messages/0/state"});
+		t.deepEqual(arrResponses[0].response.error, {message:"variable x is frozen",formattedContext:"$x",lines:[{line:2,formula:"$x.b = 8;"}],xpath:"/messages/0/state"});
 		fixCache();
 		t.deepEqual(storage.assocUnstableUnits, old_cache.assocUnstableUnits);
 		t.deepEqual(storage.assocStableUnits, old_cache.assocStableUnits);
@@ -1657,7 +1657,7 @@ test.cb.serial('calling a remote function that fails', t => {
 			aa_composer.dryRunPrimaryAATrigger(trigger, aa_address, aa, (arrResponses) => {
 				t.deepEqual(arrResponses.length, 1);
 				t.deepEqual(arrResponses[0].bounced, true);
-				t.deepEqual(arrResponses[0].response.error, {message:"==5",codeLines:[{line:4,formula:"bounce(\"==5\");"}],xpath:"/init",trace:[{type:"function",name:"f",line:4},{type:"getter",aa:"TEHAPNFMCMPUKQKJJJZVHDZEDXVLQXRX"},{type:"aa",aa:"ZAQI55OLQYXSHH5W3YSKN43WFRH4HA62",line:2}]});
+				t.deepEqual(arrResponses[0].response.error, {message:"==5",lines:[{line:4,formula:"bounce(\"==5\");"}],xpath:"/init",trace:[{type:"function",name:"f",line:4},{type:"getter",aa:"TEHAPNFMCMPUKQKJJJZVHDZEDXVLQXRX"},{type:"aa",aa:"ZAQI55OLQYXSHH5W3YSKN43WFRH4HA62",line:2}]});
 				fixCache();
 				t.deepEqual(storage.assocUnstableUnits, old_cache.assocUnstableUnits);
 				t.deepEqual(storage.assocStableUnits, old_cache.assocStableUnits);
@@ -1698,7 +1698,7 @@ test.cb.serial('invalid selector', t => {
 		aa_composer.dryRunPrimaryAATrigger(trigger, aa_address, aa, (arrResponses) => {
 			t.deepEqual(arrResponses.length, 1);
 			t.deepEqual(arrResponses[0].bounced, true);
-			t.deepEqual(arrResponses[0].response.error, {message:"result of [\"dictionary\",[[\"a\",\"9\"]]] is not a string or number: {\"a\":9}",formattedContext:"$x",codeLines:[{line:3,formula:"$x[{a:9}] = 1;"}],xpath:"/init"});
+			t.deepEqual(arrResponses[0].response.error, {message:"result of [\"dictionary\",[[\"a\",\"9\"]]] is not a string or number: {\"a\":9}",formattedContext:"$x",lines:[{line:3,formula:"$x[{a:9}] = 1;"}],xpath:"/init"});
 			fixCache();
 			t.deepEqual(storage.assocUnstableUnits, old_cache.assocUnstableUnits);
 			t.deepEqual(storage.assocStableUnits, old_cache.assocStableUnits);
@@ -1737,7 +1737,7 @@ test.cb.serial('invalid local var name', t => {
 		aa_composer.dryRunPrimaryAATrigger(trigger, aa_address, aa, (arrResponses) => {
 			t.deepEqual(arrResponses.length, 1);
 			t.deepEqual(arrResponses[0].bounced, true);
-			t.deepEqual(arrResponses[0].response.error, {message:"local var name must be string, evaluated to {\"obj\":{\"valueOf\":false,\"toString\":false},\"frozen\":false} (object)",formattedContext:"$dictionary",codeLines:[{line:2,formula:"$y = ${{valueOf: false, \"toString\": false}};"}],xpath:"/init"});
+			t.deepEqual(arrResponses[0].response.error, {message:"local var name must be string, evaluated to {\"obj\":{\"valueOf\":false,\"toString\":false},\"frozen\":false} (object)",formattedContext:"$dictionary",lines:[{line:2,formula:"$y = ${{valueOf: false, \"toString\": false}};"}],xpath:"/init"});
 			fixCache();
 			t.deepEqual(storage.assocUnstableUnits, old_cache.assocUnstableUnits);
 			t.deepEqual(storage.assocStableUnits, old_cache.assocStableUnits);
@@ -1776,7 +1776,7 @@ test.cb.serial('invalid state var name', t => {
 		aa_composer.dryRunPrimaryAATrigger(trigger, aa_address, aa, (arrResponses) => {
 			t.deepEqual(arrResponses.length, 1);
 			t.deepEqual(arrResponses[0].bounced, true);
-			t.deepEqual(arrResponses[0].response.error, {message: "assignment: state var name must be string, dictionary,valueOf,false,toString,false evaluated to {\"obj\":{\"valueOf\":false,\"toString\":false},\"frozen\":false} (object)",formattedContext:"var[dictionary]",codeLines:[{"line":2,"formula":"var[{valueOf: false, \"toString\": false}] = 1;"}],xpath:"/messages/0/state"});
+			t.deepEqual(arrResponses[0].response.error, {message: "assignment: state var name must be string, dictionary,valueOf,false,toString,false evaluated to {\"obj\":{\"valueOf\":false,\"toString\":false},\"frozen\":false} (object)",formattedContext:"var[dictionary]",lines:[{"line":2,"formula":"var[{valueOf: false, \"toString\": false}] = 1;"}],xpath:"/messages/0/state"});
 			fixCache();
 			t.deepEqual(storage.assocUnstableUnits, old_cache.assocUnstableUnits);
 			t.deepEqual(storage.assocStableUnits, old_cache.assocStableUnits);

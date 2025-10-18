@@ -228,7 +228,7 @@ function formatError(errJson) {
 	const formattedContext = !dontShowFormat ? formatErrorContext(errJson.context) : undefined;
 	
 	const linesToExtract = allLinesFromArr.length > 0 ? allLinesFromArr : (line !== undefined ? [line] : []);
-	const codeLines = linesToExtract.map(lineNum => ({
+	const lines = linesToExtract.map(lineNum => ({
 		line: lineNum,
 		formula: getFormulaByLine(lastFormula, lineNum)
 	}));
@@ -237,7 +237,7 @@ function formatError(errJson) {
 	
 	const result = {
 		message,
-		codeLines,
+		lines,
 	};
 
 	if (formattedContext) {

@@ -58,7 +58,7 @@ module.exports = function renderOp(arr, format = true) {
 		case 'local_var':
 			return `$${renderOp(arr[1], false)}`;
 		case 'with_selectors':
-            const selector = arr.context.typeSelectors['0'];
+            const selector = arr.context.selectorTypes['0'];
             if (selector === 'dotSelector') {
                 const vars = Array.isArray(arr[2]) ? arr[2].map(v => renderOp(v, false)).join('.') : renderOp(arr[2], false);
                 return `${renderOp(arr[1], false)}.${vars}`;
