@@ -95,7 +95,7 @@ function id(x) { return x[0]; }
 		return undefined;
 	};
 
-	function addLocation(returnValue, d, meta) {
+	function addLocation(returnValue, d, context) {
 		let token = null;
 		for (let i = 0; i < d.length; i++) {
             if (token) break;
@@ -120,8 +120,8 @@ function id(x) { return x[0]; }
 			returnValue.line = token.line;
 		}
 
-		if (meta) {
-			returnValue.meta = meta;
+		if (context) {
+			returnValue.context = context;
 		}
 		
 		return returnValue;
@@ -340,20 +340,20 @@ var grammar = {
     {"name": "with_selectors$ebnf$1", "symbols": ["with_selectors$ebnf$1", "with_selectors$ebnf$1$subexpression$2"], "postprocess": function arrpush(d) {return d[0].concat([d[1]]);}},
     {"name": "with_selectors", "symbols": ["with_selectors$subexpression$1", "with_selectors$ebnf$1"], "postprocess":  function(d) {
         	var v = d[0][0];
-        	let meta = {typeSelectors: {}};
+        	let context = {typeSelectors: {}};
         	var selectors = d[1].map(function(item, i){
         		if (item[0].type === 'dotSelector'){
-        			meta.typeSelectors[i] = 'dotSelector';
+        			context.typeSelectors[i] = 'dotSelector';
         			return item[0].value.substr(1);
         		} else if (item.length === 5){
-        			meta.typeSelectors[i] = 'search_param_list';
+        			context.typeSelectors[i] = 'search_param_list';
         			return addLocation(['search_param_list', item[2]], d);
         		} else {
-        			meta.typeSelectors[i] = 'arr';
+        			context.typeSelectors[i] = 'arr';
         			return addLocation(item[1], d);
         		}
         	});
-        	return addLocation(['with_selectors', v, selectors], d, meta);
+        	return addLocation(['with_selectors', v, selectors], d, context);
         }  },
     {"name": "df_param$subexpression$1", "symbols": [{"literal":"oracles"}]},
     {"name": "df_param$subexpression$1", "symbols": [{"literal":"feed_name"}]},

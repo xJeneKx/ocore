@@ -12,15 +12,17 @@ function getErrorMessage(error) {
 	if (error && error.bounce_message !== undefined) {
 		message = error.bounce_message;
 	}
-	if (typeof message === 'string' && message.length > 100) {
-		message = message.slice(0, 100) + '...';
+	
+	if (error && error.message !== undefined) {
+		message = error.message;
 	}
+	
 	return message;
 }
 
-function formatErrorMeta(meta) {
-	if (!meta || !meta.arr) return '';
-	const arr = meta.arr;
+function formatErrorContext(context) {
+	if (!context || !context.arr) return '';
+	const arr = context.arr;
 	const op = arr[0];
 	
 	if (op === 'bounce') {
@@ -28,9 +30,9 @@ function formatErrorMeta(meta) {
 	}
 	
 	if (op === 'comparison') {
-		const left = meta.left || {};
-		const right = meta.right || {};
-		const opSign = meta.op || '';
+		const left = context.left || {};
+		const right = context.right || {};
+		const opSign = context.op || '';
 		
 		const leftCode = renderOp(left.var_name);
 		const rightCode = renderOp(right.var_name);
@@ -48,7 +50,7 @@ function formatErrorMeta(meta) {
 	return `${renderOp(arr)}`;
 }
 
-function formatConsoleTrace(callStack, callStackLines, aaPath, currentLine, aaEnterLines, gettersAA, namedFunc) {
+function formatConsoleTrace(callStack, aaPath, currentLine, aaEnterLines, gettersAA, namedFunc) {
 	try {
 		const frames = [];
 		let topNamed = namedFunc;
@@ -116,9 +118,7 @@ function buildContext(errJson) {
 	let inFunc = false;
 	let dontShowFormat = false;
 	const callStack = [];
-	const callStackLines = [];
 	let stackAtLastLine = [];
-	let stackLinesAtLastLine = [];
 	const aaEnterLines = [];
 	let lastGettersAA = undefined;
 	let gettersAAAtLastLine = undefined;
@@ -133,12 +133,10 @@ function buildContext(errJson) {
 		if (t.line !== undefined) {
 			lastTraceLine = t.line;
 			stackAtLastLine = callStack.slice();
-			stackLinesAtLastLine = callStackLines.slice();
 			gettersAAAtLastLine = lastGettersAA;
 			namedFuncAtLastLine = lastNamedFunc;
 			snapshotsByLine[lastTraceLine] = {
 				stack: stackAtLastLine,
-				stackLines: stackLinesAtLastLine,
 				gettersAA: gettersAAAtLastLine,
 				namedFunc: namedFuncAtLastLine,
 			};
@@ -148,13 +146,11 @@ function buildContext(errJson) {
 			case 'enter to func':
 				inFunc = true;
 				if (t.name) callStack.push(t.name); else callStack.push('<anonymous>');
-				callStackLines.push(lastTraceLine);
 				if (t.name) lastNamedFunc = t.name;
 				break;
 			case 'exit from func':
 				inFunc = false;
 				if (callStack.length) callStack.pop();
-				if (callStackLines.length) callStackLines.pop();
 				lastNamedFunc = undefined;
 				for (let i = callStack.length - 1; i >= 0; i--) {
 					const nm = callStack[i];
@@ -200,7 +196,6 @@ function buildContext(errJson) {
 	
 	const targetSnap = snapshotsByLine[line] || undefined;
 	const callStackAtTarget = targetSnap?.stack || stackAtLastLine;
-	const callStackLinesAtTarget = targetSnap?.stackLines || stackLinesAtLastLine;
 	const gettersAAAtTarget = targetSnap?.gettersAA || gettersAAAtLastLine;
 	const namedFuncAtTarget = targetSnap?.namedFunc || lastNamedFunc;
 	
@@ -213,7 +208,6 @@ function buildContext(errJson) {
 		inFunc,
 		dontShowFormat,
 		callStack: callStackAtTarget,
-		callStackLines: callStackLinesAtTarget,
 		aaEnterLines,
 		gettersAA: gettersAAAtTarget,
 		namedFunc: namedFuncAtTarget,
@@ -221,24 +215,24 @@ function buildContext(errJson) {
 }
 
 function formatError(errJson) {
-	const { aaPath, lastFormula, line, allLinesFromArr, dontShowFormat, callStack, callStackLines, aaEnterLines, gettersAA, namedFunc } = buildContext(errJson);
+	const { aaPath, lastFormula, line, allLinesFromArr, dontShowFormat, callStack, aaEnterLines, gettersAA, namedFunc } = buildContext(errJson);
 	
-	const message = `${getErrorMessage(errJson.error)}`
+	const message = getErrorMessage(errJson.error)
 	
-	const meta = !dontShowFormat ? formatErrorMeta(errJson.meta) : undefined;
+	const formatedContext = !dontShowFormat ? formatErrorContext(errJson.context) : undefined;
 	
 	const linesToExtract = allLinesFromArr.length > 0 ? allLinesFromArr : (line !== undefined ? [line] : []);
-	const formulaLines = linesToExtract.map(lineNum => ({
-		line: lineNum,
+	const codeLines = linesToExtract.map(lineNum => ({
+		lineNumber: lineNum,
 		formula: getFormulaByLine(lastFormula, lineNum)
 	}));
 	
-	const traceBlock = formatConsoleTrace(callStack, callStackLines, aaPath, line, aaEnterLines, gettersAA, namedFunc);
+	const traceBlock = formatConsoleTrace(callStack, aaPath, line, aaEnterLines, gettersAA, namedFunc);
 	
 	return {
 		message,
-		meta,
-		lines: formulaLines,
+		formatedContext,
+		codeLines,
 		xpath: errJson.xpath || undefined,
 		trace: traceBlock || undefined
 	};

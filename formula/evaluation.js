@@ -43,8 +43,6 @@ var decimalPi = new Decimal(Math.PI);
 var dec0 = new Decimal(0);
 var dec1 = new Decimal(1);
 
-const startTime = Date.now();
-
 function wrappedObject(obj){
 	this.obj = obj;
 	this.frozen = false;
@@ -58,7 +56,7 @@ function Func(args, body, scopeVarNames) {
 	this.scopeVarNames = scopeVarNames;
 }
 
-exports.evaluate = function (opts, callback, astTrace = [], xpath = '') {
+exports.evaluate = function (opts, astTrace, xpath, callback) {
 	var conn = opts.conn;
 	var formula = fixFormula(opts.formula, opts.address);
 	var messages = opts.messages || [];
@@ -77,6 +75,13 @@ exports.evaluate = function (opts, callback, astTrace = [], xpath = '') {
 	if (!objValidationState.logs)
 		objValidationState.logs = [];
 	var logs = objValidationState.logs || [];
+
+	if (!Array.isArray(astTrace)) {
+		astTrace = [];
+	}
+	if (typeof xpath !== 'string') {
+		xpath = '';
+	}
 	
 	astTrace.push({system: 'enter to aa', aa: address, formula, bGetters: opts.bGetters});
 	
@@ -2697,8 +2702,10 @@ exports.evaluate = function (opts, callback, astTrace = [], xpath = '') {
 						if (!ValidationUtils.isNonnegativeInteger(evaluated_key))
 							return setFatalError("bad selector key: " + evaluated_key, cb2, { arr });
 					}
-					else if (typeof evaluated_key !== 'string')
-						return setFatalError("result of " + JSON.stringify(key) + " is not a string or number: " + evaluated_key, cb2, { arr });
+					else if (typeof evaluated_key !== 'string'){
+						const result = evaluated_key instanceof wrappedObject ? JSON.stringify(evaluated_key.obj) : evaluated_key;
+						return setFatalError("result of " + JSON.stringify(key) + " is not a string or number: " + result, cb2, { arr });
+					}
 					arrEvaluatedKeys.push(evaluated_key);
 					cb2();
 				});
@@ -3005,20 +3012,20 @@ exports.evaluate = function (opts, callback, astTrace = [], xpath = '') {
 		return ValidationUtils.isArrayOfLength(value, 1) ? unwrapOneElementArrays(value[0]) : value;
 	}
 	
-	function setFatalError(err, cb, cb_arg, meta){
+	function setFatalError(err, cb, cb_arg, context){
 		if (cb_arg?.arr) {
-			meta = cb_arg;
+			context = cb_arg;
 			cb_arg = undefined;
 		}
 		
 		try {
-			const errorData = { error: err, meta: meta || {}, trace: astTrace, xpath };
+			const errorData = { error: err, context: context || {}, trace: astTrace, xpath };
 			fatal_error = {formattedError: formatError(errorData)};
-		} catch(_) {
+		} catch(formatError) {
+			console.error('unhandled error, use old format', err, formatError);
 			fatal_error = err;
 		}
 		
-		console.error(`Error: ${trigger.unit}`);
 		(cb_arg !== undefined) ? cb(cb_arg) : cb(err);
 		astTrace = [];
 	}
@@ -3135,9 +3142,9 @@ function callGetter(conn, aa_address, getter, args, stateVars, objValidationStat
 			objValidationState: objValidationState,
 			address: aa_address
 		};
-		exports.evaluate(opts, function (err, res) {
-			if (res === null)
-				return cb(err.bounce_message || "formula " + f + " failed: " + err);
+		exports.evaluate(opts, astTrace, xpath, function (err, res) {
+			if (res === null) 
+				return cb(err.formattedError || "formula " + f + " failed: " + err);
 			if (!locals[getter])
 				return cb("no such getter: " + JSON.stringify(getter));
 			if (!(locals[getter] instanceof Func))
@@ -3165,10 +3172,10 @@ function callGetter(conn, aa_address, getter, args, stateVars, objValidationStat
 				objValidationState: objValidationState,
 				address: aa_address
 			};
-			exports.evaluate(call_opts, function (err, res) {
+			exports.evaluate(call_opts, astTrace, xpath, function (err, res) {
 				if (res === null) {
 					addAstTrace({ system: 'error in getter', aa: aa_address, formula: opts.formula, getter: getter });
-					return cb(err.bounce_message || "formula " + call_formula + " failed: " + err);
+					return cb(err.formattedError || "formula " + call_formula + " failed: " + err);
 				}
 				// fractional and large numbers are returned as strings, attempt to convert back
 				if (typeof res === 'string') {
@@ -3177,8 +3184,8 @@ function callGetter(conn, aa_address, getter, args, stateVars, objValidationStat
 						res = f;
 				}
 				cb(null, toOscriptType(res));
-			}, astTrace, xpath);
-		}, astTrace, xpath);
+			});
+		});
 	});
 }
 

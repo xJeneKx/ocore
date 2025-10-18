@@ -574,11 +574,11 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			objValidationState: objValidationState,
 			address: address
 		};
-		formulaParser.evaluate(opts, function (err, res) {
+		formulaParser.evaluate(opts, [], '/getters', function (err, res) {
 			if (res === null)
 				return cb(err.formattedError || "formula " + f + " failed: " + err);
 			replace(arrDefinition, 1, '', locals, cb, '');
-		}, [], '/getters');
+		});
 	}
 	
 	// note that app=definition is also replaced using the current trigger and vars, its code has to generate "{}"-formulas in order to be dynamic
@@ -603,7 +603,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					objValidationState: objValidationState,
 					address: address
 				};
-				return formulaParser.evaluate(opts, function (err, res) {
+				return formulaParser.evaluate(opts, [], xpath, function (err, res) {
 					if (res === null)
 						return cb(err.formattedError || "formula " + f + " failed: "+err);
 					delete obj[name];
@@ -617,7 +617,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 						return cb({error: "calculated value of " + name + " looks like a formula again: " + res, xpath});
 					assignField(obj, res, value);
 					replace(obj, res, path, locals, cb, xpath);
-				}, [], xpath);
+				});
 			}
 		}
 		if (typeof value === 'number' || typeof value === 'boolean')
@@ -647,7 +647,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 				address: address,
 				bObjectResultAllowed: true
 			};
-			formulaParser.evaluate(opts, function (err, res) {
+			formulaParser.evaluate(opts, [], xpath, function (err, res) {
 				//	console.log('--- f', f, '=', res, typeof res);
 				if (res === null)
 					return cb(err.formattedError || "formula " + f + " failed: "+err);
@@ -660,7 +660,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 				else
 					assignField(obj, name, res);
 				cb();
-			}, [], xpath);
+			});
 		}
 		else if (hasCases(value)) {
 			var thecase;
@@ -689,7 +689,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 						objValidationState: objValidationState,
 						address: address
 					};
-					formulaParser.evaluate(opts, function (err, res) {
+					formulaParser.evaluate(opts, [], xpath + '/' + idx + '/if', function (err, res) {
 						if (res === null)
 							return cb2(err.formattedError || "formula " + acase.if + " failed: " + err);
 						if (res) {
@@ -698,7 +698,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 							return cb2('done');
 						}
 						cb2(); // try next
-					}, [], xpath + '/' + idx + '/if');
+					});
 				},
 				function (err) {
 					xpath += '/' + idx;
@@ -727,11 +727,11 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 						objValidationState: objValidationState,
 						address: address
 					};
-					formulaParser.evaluate(opts, function (err, res) {
+					formulaParser.evaluate(opts, [], xpath + '/init', function (err, res) {
 						if (res === null)
 							return cb(err.formattedError || "formula " + f + " failed: " + err);
 						replace(obj, name, path, locals, cb, xpath);
-					}, [], xpath + '/init');
+					});
 				}
 			);
 		}
@@ -753,7 +753,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					objValidationState: objValidationState,
 					address: address
 				};
-				formulaParser.evaluate(opts, function (err, res) {
+				formulaParser.evaluate(opts, [], xpath + '/if', function (err, res) {
 					if (res === null)
 						return cb(err.formattedError || "formula " + value.if + " failed: " + err);
 					if (!res) {
@@ -765,7 +765,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					}
 					delete value.if;
 					cb2();
-				}, [], xpath + '/if');
+				});
 			}
 			evaluateIf(function () {
 				if (typeof value.init !== 'string')
@@ -785,12 +785,12 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 					objValidationState: objValidationState,
 					address: address
 				};
-				formulaParser.evaluate(opts, function (err, res) {
+				formulaParser.evaluate(opts, [], xpath + '/init', function (err, res) {
 					if (res === null)
 						return cb(err.formattedError || "formula " + value.init + " failed: " + err);
 					delete value.init;
 					replace(obj, name, path, locals, cb, xpath);
-				}, [], xpath + '/init');
+				});
 			});
 		}
 		else if (Array.isArray(value)) {
@@ -1328,7 +1328,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			address: address,
 			objResponseUnit: objResponseUnit
 		};
-		formulaParser.evaluate(opts, function (err, res) {
+		formulaParser.evaluate(opts, [], objStateUpdate.xpath, function (err, res) {
 			//	console.log('--- state update formula', objStateUpdate.formula, '=', res);
 			if (res === null)
 				return cb(err.formattedError || "formula " + objStateUpdate.formula + " failed: "+err);
@@ -1336,7 +1336,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 			if (rv_len > constants.MAX_RESPONSE_VARS_LENGTH)
 				return cb(`response vars too long: ${rv_len}`);
 			cb();
-		}, [], objStateUpdate.xpath);
+		});
 	}
 	
 	function getResponseVarsLength() {
@@ -1537,7 +1537,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 				throw Error('response_unit with bouncing a secondary AA');
 			if (!bAddedResponse && objValidationState.logs) // add the logs from the final bouncing unit
 				arrResponses.push({ logs: objValidationState.logs });
-			return onDone(null, {address, error_message});
+			return onDone(null, {address, next: error_message});
 		}
 		fixStateVars();
 		saveStateVars();
@@ -1595,7 +1595,7 @@ function handleTrigger(conn, batch, trigger, params, stateVars, arrDefinition, a
 						// revert
 						if (bSecondary)
 							return bounce(err);
-						return revert({revert: "one of secondary AAs bounced with error: ", err});
+						return revert({message: "one of secondary AAs bounced with error: ", callChain: err});
 					}
 					saveStateVars();
 					addUpdatedStateVarsIntoPrimaryResponse();

@@ -91,7 +91,7 @@
 		return undefined;
 	};
 
-	function addLocation(returnValue, d, meta) {
+	function addLocation(returnValue, d, context) {
 		let token = null;
 		for (let i = 0; i < d.length; i++) {
             if (token) break;
@@ -116,8 +116,8 @@
 			returnValue.line = token.line;
 		}
 
-		if (meta) {
-			returnValue.meta = meta;
+		if (context) {
+			returnValue.context = context;
 		}
 		
 		return returnValue;
@@ -283,20 +283,20 @@ definition -> "definition" "[" expr "]"   {% function(d) { return addLocation(['
 
 with_selectors -> (func_call|remote_func_call|local_var|trigger_outputs|trigger_data|params|previous_aa_responses|unit|definition) (%dotSelector|"[" "[" search_param_list "]" "]"|"[" expr "]"):+  {% function(d) {
 	var v = d[0][0];
-	let meta = {typeSelectors: {}};
+	let context = {typeSelectors: {}};
 	var selectors = d[1].map(function(item, i){
 		if (item[0].type === 'dotSelector'){
-			meta.typeSelectors[i] = 'dotSelector';
+			context.typeSelectors[i] = 'dotSelector';
 			return item[0].value.substr(1);
 		} else if (item.length === 5){
-			meta.typeSelectors[i] = 'search_param_list';
+			context.typeSelectors[i] = 'search_param_list';
 			return addLocation(['search_param_list', item[2]], d);
 		} else {
-			meta.typeSelectors[i] = 'arr';
+			context.typeSelectors[i] = 'arr';
 			return addLocation(item[1], d);
 		}
 	});
-	return addLocation(['with_selectors', v, selectors], d, meta);
+	return addLocation(['with_selectors', v, selectors], d, context);
 }  %}
 
 

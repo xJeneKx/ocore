@@ -58,7 +58,6 @@ module.exports = function renderOp(arr, format = true) {
 		case 'local_var':
 			return `$${renderOp(arr[1], false)}`;
 		case 'with_selectors':
-			console.log('qqqqq', arr);
             const selector = arr.meta.typeSelectors['0'];
             if (selector === 'dotSelector') {
                 const vars = Array.isArray(arr[2]) ? arr[2].map(v => renderOp(v, false)).join('.') : renderOp(arr[2], false);
@@ -99,7 +98,7 @@ module.exports = function renderOp(arr, format = true) {
         case 'remote_func_call':
 		    return `$${renderOp(arr[3], false)}`;
 		default:
-			console.log('fuck render', arr);
+			console.error('unknown op render', arr);
 			return op;
 	}
 
