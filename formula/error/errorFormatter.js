@@ -180,15 +180,15 @@ function buildContext(errJson) {
 		}
 	}
 	
-	let line = errJson?.meta?.arr?.line;
-	const allLinesFromArr = Array.from(collectLinesFromArr(errJson?.meta?.arr)).sort((a, b) => a - b);
+	let line = errJson?.context?.arr?.line;
+	const allLinesFromArr = Array.from(collectLinesFromArr(errJson?.context?.arr)).sort((a, b) => a - b);
 	
 	if (errJson.error === 'return value missing') {
 		dontShowFormat = true;
-		const actualMeta = errJson.meta?.arr?.[1]?.at(-1);
-		if (actualMeta) {
-			line = actualMeta.line;
-			errJson.meta = { arr: actualMeta };
+		const actualContext = errJson.context?.arr?.[1]?.at(-1);
+		if (actualContext) {
+			line = actualContext.line;
+			errJson.context = { arr: actualContext };
 		}
 	}
 	
