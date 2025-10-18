@@ -237,9 +237,12 @@ function formatError(errJson) {
 	
 	const result = {
 		message,
-		formatedContext,
 		codeLines,
 	};
+
+	if (formatedContext) {
+		result.formatedContext = formatedContext;
+	}
 
 	if (errJson.xpath) {
 		result.xpath = errJson.xpath;

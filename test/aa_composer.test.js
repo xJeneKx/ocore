@@ -1657,7 +1657,7 @@ test.cb.serial('calling a remote function that fails', t => {
 			aa_composer.dryRunPrimaryAATrigger(trigger, aa_address, aa, (arrResponses) => {
 				t.deepEqual(arrResponses.length, 1);
 				t.deepEqual(arrResponses[0].bounced, true);
-				t.deepEqual(arrResponses[0].response.error, {message:"==5",formatedContext:"$f",codeLines:[{lineNumber:4,formula:"bounce(\"==5\");"}],xpath:"/init",trace:[{type:"function",name:"f",line:4},{type:"getter",aa:"TEHAPNFMCMPUKQKJJJZVHDZEDXVLQXRX"},{type:"aa",aa:"ZAQI55OLQYXSHH5W3YSKN43WFRH4HA62",line:2}]});
+				t.deepEqual(arrResponses[0].response.error, {message:"==5",codeLines:[{lineNumber:4,formula:"bounce(\"==5\");"}],xpath:"/init",trace:[{type:"function",name:"f",line:4},{type:"getter",aa:"TEHAPNFMCMPUKQKJJJZVHDZEDXVLQXRX"},{type:"aa",aa:"ZAQI55OLQYXSHH5W3YSKN43WFRH4HA62",line:2}]});
 				fixCache();
 				t.deepEqual(storage.assocUnstableUnits, old_cache.assocUnstableUnits);
 				t.deepEqual(storage.assocStableUnits, old_cache.assocStableUnits);

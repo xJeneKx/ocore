@@ -2302,7 +2302,7 @@ exports.evaluate = function (opts, astTrace, xpath, callback) {
 											caller = function (res_cb) {
 												callGetter(conn, funcInfo.remote.remote_aa, funcInfo.remote.func_name, fargs, stateVars, objValidationState, (err, r) => {
 													if (err)
-														return setFatalError(err, res_cb, false, { arr });
+														return setFatalError(err, res_cb, false);
 													
 													astTrace.push({system: 'exit from getters', aa: funcInfo.remote.remote_aa});
 													res_cb(r);
@@ -2485,7 +2485,7 @@ exports.evaluate = function (opts, astTrace, xpath, callback) {
 									return setFatalError(err, cb, false, { arr });
 								callGetter(conn, remote_aa, func_name, args, stateVars, objValidationState, (err, res) => {
 									if (err)
-										return setFatalError(err, cb, false, { arr });
+										return setFatalError(err, cb, false);
 									astTrace.push({system: 'exit from getters', aa: remote_aa});
 									cb(res);
 								}, astTrace, xpath);
