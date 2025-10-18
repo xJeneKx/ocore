@@ -2300,13 +2300,13 @@ exports.evaluate = function (opts, astTrace, xpath, callback) {
 										else if (funcInfo.remote) {
 											var fargs = (func) => getArgs(func.args.length);
 											caller = function (res_cb) {
-												callGetter(conn, funcInfo.remote.remote_aa, funcInfo.remote.func_name, fargs, stateVars, objValidationState, (err, r) => {
+												callGetter(conn, funcInfo.remote.remote_aa, funcInfo.remote.func_name, fargs, stateVars, objValidationState, astTrace, xpath, (err, r) => {
 													if (err)
 														return setFatalError(err, res_cb, false);
 													
 													astTrace.push({system: 'exit from getters', aa: funcInfo.remote.remote_aa});
 													res_cb(r);
-												}, astTrace, xpath);
+												});
 											};
 										}
 										else
@@ -2483,12 +2483,12 @@ exports.evaluate = function (opts, astTrace, xpath, callback) {
 									return cb(false);
 								if (err)
 									return setFatalError(err, cb, false, { arr });
-								callGetter(conn, remote_aa, func_name, args, stateVars, objValidationState, (err, res) => {
+								callGetter(conn, remote_aa, func_name, args, stateVars, objValidationState, astTrace, xpath, (err, res) => {
 									if (err)
 										return setFatalError(err, cb, false);
 									astTrace.push({system: 'exit from getters', aa: remote_aa});
 									cb(res);
-								}, astTrace, xpath);
+								});
 							});
 						});
 					}
@@ -3103,7 +3103,7 @@ function stateVars2assoc(stateVars) {
 	return assoc;
 }
 
-function callGetter(conn, aa_address, getter, args, stateVars, objValidationState, cb, astTrace, xpath) {
+function callGetter(conn, aa_address, getter, args, stateVars, objValidationState, astTrace, xpath, cb) {
 	var i = 0;
 	var locals = {};
 	function getNextArgName() {
@@ -3218,7 +3218,7 @@ function executeGetterInState(conn, aa_address, getter, args, stateVars, assocBa
 		while (args.length && (args[args.length - 1] === null || args[args.length - 1] === undefined))
 			args.length--;
 		args = args.map(toOscriptType);
-		callGetter(conn, aa_address, getter, args, stateVars, objValidationState, (err, res) => {
+		callGetter(conn, aa_address, getter, args, stateVars, objValidationState, [], '', (err, res) => {
 			if (err)
 				return cb(err);
 			cb(null, toJsType(res));
