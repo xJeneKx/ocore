@@ -857,7 +857,7 @@ test.cb.serial('variable reassignment', t => {
 				conn.release();
 			});
 			t.deepEqual(!!bPosted, true);
-			t.deepEqual(bounce_message, {message: 'reassignment to a, old value 9', formatedContext: '$a', codeLines: [{lineNumber: 1, formula: '$a=10; trigger.output[[asset=base]] - 2000'}], trace: undefined, xpath: '/messages/0/payload/payload/outputs/0/amount'});
+			t.deepEqual(bounce_message, {message: 'reassignment to a, old value 9', formatedContext: '$a', codeLines: [{lineNumber: 1, formula: '$a=10; trigger.output[[asset=base]] - 2000'}], xpath: '/messages/0/payload/payload/outputs/0/amount'});
 			t.deepEqual(objUnit.messages.find(function (message) { return (message.app === 'payment'); }).payload.outputs.find(function (output) { return (output.address === trigger.address); }).amount, 30000);
 			t.end();
 		});

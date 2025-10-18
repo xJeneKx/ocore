@@ -61,27 +61,33 @@ function formatConsoleTrace(callStack, aaPath, currentLine, aaEnterLines, getter
 			}
 		}
 		if (topNamed) {
-			const suffix = currentLine !== undefined ? ` (line: ${currentLine})` : '';
-			frames.push(`    at ${topNamed}${suffix}`);
+			const frame = { type: 'function', name: topNamed };
+			if (currentLine !== undefined) {
+				frame.line = currentLine;
+			}
+			frames.push(frame);
 		}
 		const path = Array.isArray(aaPath) ? aaPath : [];
 		const enterLines = Array.isArray(aaEnterLines) ? aaEnterLines : [];
 		if (path.length) {
 			const curAA = path[path.length - 1];
 			if (gettersAA && gettersAA === curAA) {
-				frames.push(`    in getters of AA ${curAA}`);
+				frames.push({ type: 'getter', aa: curAA });
 			}
 			for (let i = path.length - 2; i >= 0; i--) {
 				const aa = path[i];
 				const ln = enterLines[i + 1];
-				const suffix = ln !== undefined ? ` (line: ${ln})` : '';
-				frames.push(`    at AA ${aa}${suffix}`);
+				const frame = { type: 'aa', aa };
+				if (ln !== undefined) {
+					frame.line = ln;
+				}
+				frames.push(frame);
 			}
 		}
-		if (!frames.length) return '';
-		return ['Trace:'].concat(frames).join('\n');
+		if (!frames.length) return null;
+		return frames;
 	} catch (_) {
-		return '';
+		return null;
 	}
 }
 
@@ -229,13 +235,21 @@ function formatError(errJson) {
 	
 	const traceBlock = formatConsoleTrace(callStack, aaPath, line, aaEnterLines, gettersAA, namedFunc);
 	
-	return {
+	const result = {
 		message,
 		formatedContext,
 		codeLines,
-		xpath: errJson.xpath || undefined,
-		trace: traceBlock || undefined
 	};
+
+	if (errJson.xpath) {
+		result.xpath = errJson.xpath;
+	}
+
+	if (traceBlock) {
+		result.trace = traceBlock;
+	}
+
+	return result;
 }
 
 module.exports = formatError;
