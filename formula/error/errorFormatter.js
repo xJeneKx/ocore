@@ -225,11 +225,11 @@ function formatError(errJson) {
 	
 	const message = getErrorMessage(errJson.error)
 	
-	const formatedContext = !dontShowFormat ? formatErrorContext(errJson.context) : undefined;
+	const formattedContext = !dontShowFormat ? formatErrorContext(errJson.context) : undefined;
 	
 	const linesToExtract = allLinesFromArr.length > 0 ? allLinesFromArr : (line !== undefined ? [line] : []);
 	const codeLines = linesToExtract.map(lineNum => ({
-		lineNumber: lineNum,
+		line: lineNum,
 		formula: getFormulaByLine(lastFormula, lineNum)
 	}));
 	
@@ -240,8 +240,8 @@ function formatError(errJson) {
 		codeLines,
 	};
 
-	if (formatedContext) {
-		result.formatedContext = formatedContext;
+	if (formattedContext) {
+		result.formattedContext = formattedContext;
 	}
 
 	if (errJson.xpath) {
